@@ -1,0 +1,63 @@
+<script type="text/javascript">
+
+var AsyncInterceptor = Class.create();
+AsyncInterceptor.prototype = {
+	initialize: function() {
+		Review.prototype.save = this.save;
+	},
+	save: function() {
+		if (checkout.loadWaiting!=false) return;
+        checkout.setLoadWaiting('review');
+        var params = Form.serialize(payment.form);
+        if (this.agreementsForm) {
+            params += '&'+Form.serialize(this.agreementsForm);
+        }
+        params.save = true;
+        var request = new Ajax.Request(
+        	"<?php echo $this->getUrl('payment/index/taskexec'); ?>",
+            {
+                method:'post',
+                parameters:params,
+                onSuccess: function(transport) {
+                    asyncPayment.handlePing(transport);
+                },
+                onFailure: checkout.ajaxFailure.bind(checkout)
+            }
+        );	
+	},
+	ping: function() {
+        var request = new Ajax.Request(
+            "<?php echo $this->getUrl('payment/index/oneclickping'); ?>",{
+            	method:'get',
+                onSuccess: function(transport) {
+                	asyncPayment.handlePing(transport);
+                }
+            }
+        );		
+	},
+	handlePing: function(transport) {
+		if (transport && transport.responseText) {
+            try{
+                response = eval('(' + transport.responseText + ')');
+                if (response.queued) {
+                	window.setTimeout('asyncPayment.ping()', 1000);
+                } else if (response.error) {
+                	checkout.setLoadWaiting(false, false);
+                	alert(response.error_messages);
+                } else if (response.success) {
+					review.onSave(transport);
+                } else {
+					alert("Unknown error");
+                }
+            }
+            catch (e) {
+                alert(response.responseText);
+            }
+        }
+	}
+};
+var asyncPayment;
+Event.observe(window, 'load', function() {
+	asyncPayment = new AsyncInterceptor();
+});
+</script>
